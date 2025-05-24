@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Build Docker image
-      run: docker build -t smenycz-payout-calculator
+      - name: Build Docker image
+        run: docker build -t smenycz-payout-calculator .
