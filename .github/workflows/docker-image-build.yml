@@ -1,4 +1,4 @@
-name: Docker Build Only
+name: Docker Build & Export
 
 on:
   push:
@@ -16,3 +16,12 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t smenycz-payout-calculator .
+
+      - name: Save image to tarball
+        run: docker save smenycz-payout-calculator -o smenycz-payout-calculator.tar
+
+      - name: Upload image as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-image
+          path: smenycz-payout-calculator.tar
