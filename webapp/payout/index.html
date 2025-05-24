@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Výplata</title>
+  <link rel="stylesheet" href="../fill-form/styles.css">
+</head>
+<body>
+  <h1>Výpočet čisté výplaty</h1>
+  <form id="payoutForm">
+    <label for="month">Vyberte měsíc:</label>
+    <input type="month" id="month" name="month" required>
+    <button type="submit">Spočítat</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    document.getElementById('payoutForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const month = document.getElementById('month').value;
+      const res = await fetch(`http://localhost:3000/api/payout?month=${month}`);
+      const data = await res.json();
+      document.getElementById('result').innerHTML = `
+        <p>Hrubá mzda: <b>${data.gross.toFixed(2)} Kč</b></p>
+        <p>Daň (15%): <b>${data.tax.toFixed(2)} Kč</b></p>
+        <p>Sleva na dani: <b>${data.taxDiscount.toFixed(2)} Kč</b></p>
+        <p>Sociální a zdravotní (11,5%): <b>${data.insurance.toFixed(2)} Kč</b></p>
+        <p><b>Čistá mzda: ${data.net.toFixed(2)} Kč</b></p>
+      `;
+    });
+  </script>
+</body>
+</html>

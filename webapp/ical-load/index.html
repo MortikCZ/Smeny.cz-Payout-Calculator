@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Načíst směny z iCal</title>
+  <link rel="stylesheet" href="../fill-form/styles.css">
+</head>
+<body>
+  <h1>Načíst směny z iCal</h1>
+  <form id="icalForm">
+    <label for="iCalUrl">URL iCal souboru:</label>
+    <input type="text" id="iCalUrl" name="iCalUrl" required placeholder="https://...">
+    <button type="submit">Načíst směny</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    document.getElementById('icalForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const iCalUrl = document.getElementById('iCalUrl').value;
+      document.getElementById('result').textContent = 'Načítám...';
+      try {
+        const res = await fetch('http://localhost:3000/api/load-ical', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iCalUrl })
+        });
+        const data = await res.json();
+        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('result').textContent = 'Chyba při načítání směn.';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -8,31 +8,19 @@
 </head>
 <body>
   <div class="container">
-    <h1>Moje směny</h1>
+    <h1>Směny</h1>
     <label for="position-filter">Filtrovat podle pozice:</label>
     <select id="position-filter">
       <option value="">Vše</option>
-      <option value="Uvaděč">Uvaděč</option>
-      <option value="Bar">Bar</option>
-      <option value="VIP">VIP</option>
-      <!-- Přidejte další pozice dle potřeby -->
+    </select>
+    <label for="year-filter">Filtrovat podle roku:</label>
+    <select id="year-filter">
+      <option value="">Vše</option>
     </select>
     <label for="month-filter">Filtrovat podle měsíce:</label>
-<select id="month-filter">
-  <option value="">Vše</option>
-  <option value="01">Leden</option>
-  <option value="02">Únor</option>
-  <option value="03">Březen</option>
-  <option value="04">Duben</option>
-  <option value="05">Květen</option>
-  <option value="06">Červen</option>
-  <option value="07">Červenec</option>
-  <option value="08">Srpen</option>
-  <option value="09">Září</option>
-  <option value="10">Říjen</option>
-  <option value="11">Listopad</option>
-  <option value="12">Prosinec</option>
-</select>
+    <select id="month-filter">
+      <option value="">Vše</option>
+    </select>
     <table id="shifts-table">
       <thead>
         <tr>
@@ -42,56 +30,142 @@
           <th>Konec</th>
           <th>Skutečný začátek</th>
           <th>Skutečný konec</th>
-          <th>Hodin</th>
-          <th>Výplata</th>
+          <th>Délka</th>
+          <th>Mzda</th>
         </tr>
       </thead>
       <tbody id="shifts-body">
       </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6" style="text-align:right;font-weight:bold;">Celkem:</td>
+          <td id="total-hours">0</td>
+          <td id="total-pay">0</td>
+        </tr>
+      </tfoot>
     </table>
   </div>
 
   <script>
-    async function fetchShifts() {
-      try {
-        const res = await fetch('http://localhost:3000/api/shifts');
-        const data = await res.json();
-        const tbody = document.getElementById('shifts-body');
-        tbody.innerHTML = '';
+  let allShifts = [];
 
-        const positionFilter = document.getElementById('position-filter').value;
-        const monthFilter = document.getElementById('month-filter').value;
+  function fillFilters(data) {
+    const positions = Array.from(new Set(data.map(s => s.position).filter(Boolean)));
+    const positionSelect = document.getElementById('position-filter');
+    positionSelect.innerHTML = '<option value="">Vše</option>' +
+      positions.map(pos => `<option value="${pos}">${pos}</option>`).join('');
 
-        data
-          .filter(shift => {
-            const shiftDate = new Date(`${shift.start_date}T${shift.start_time}`);
-            const shiftMonth = String(shiftDate.getMonth() + 1).padStart(2, '0');
-            return (!positionFilter || shift.position === positionFilter) &&
-                   (!monthFilter || shiftMonth === monthFilter);
-          })
-          .forEach(shift => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td>${shift.title}</td>
-              <td>${shift.position}</td>
-              <td>${shift.start_date} ${shift.start_time}</td>
-              <td>${shift.end_date} ${shift.end_time}</td>
-              <td>${shift.real_startdate ?? '-' } ${shift.real_starttime ?? ''}</td>
-              <td>${shift.real_enddate ?? '-' } ${shift.real_endtime ?? ''}</td>
-              <td>${shift.hours?.toFixed(2) ?? '-'}</td>
-              <td>${shift.pay?.toFixed(2) ?? '-'}</td>
-            `;
-            tbody.appendChild(tr);
-          });
-      } catch (error) {
-        console.error('Chyba při načítání směn:', error);
+    const yearMonthSet = new Set(data.map(s => s.start_date.slice(0, 7)));
+    const years = Array.from(new Set(Array.from(yearMonthSet).map(ym => ym.slice(0, 4)))).sort();
+    const yearSelect = document.getElementById('year-filter');
+    yearSelect.innerHTML = '<option value="">Vše</option>' +
+      years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+    const monthNames = {
+      "01": "Leden", "02": "Únor", "03": "Březen", "04": "Duben", "05": "Květen", "06": "Červen",
+      "07": "Červenec", "08": "Srpen", "09": "Září", "10": "Říjen", "11": "Listopad", "12": "Prosinec"
+    };
+    const monthSelect = document.getElementById('month-filter');
+
+    function updateMonthOptions() {
+      const selectedYear = yearSelect.value;
+      const availableMonths = Array.from(yearMonthSet)
+        .filter(ym => !selectedYear || ym.slice(0, 4) === selectedYear)
+        .map(ym => ym.slice(5, 7));
+      const uniqueMonths = Array.from(new Set(availableMonths)).sort();
+      monthSelect.innerHTML = '<option value="">Vše</option>' +
+        uniqueMonths.map(m => `<option value="${m}">${monthNames[m] || m}</option>`).join('');
+
+      const now = new Date();
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+      if (uniqueMonths.includes(currentMonth)) {
+        monthSelect.value = currentMonth;
+      } else {
+        monthSelect.value = '';
       }
     }
 
-    document.getElementById('position-filter').addEventListener('change', fetchShifts);
-    document.getElementById('month-filter').addEventListener('change', fetchShifts);
+    const now = new Date();
+    const currentYear = String(now.getFullYear());
+    if (years.includes(currentYear)) {
+      yearSelect.value = currentYear;
+    } else {
+      yearSelect.value = '';
+    }
 
-    fetchShifts();
+    updateMonthOptions();
+
+    yearSelect.onchange = function() {
+      updateMonthOptions();
+      fetchShifts();
+    };
+    monthSelect.onchange = fetchShifts;
+  }
+
+  async function fetchShifts() {
+    try {
+      const res = await fetch('http://localhost:3000/api/shifts');
+      const data = await res.json();
+      allShifts = data;
+
+      if (
+        document.getElementById('position-filter').options.length <= 1 ||
+        document.getElementById('year-filter').options.length <= 1 ||
+        document.getElementById('month-filter').options.length <= 1
+      ) {
+        fillFilters(data);
+      }
+
+      const positionFilter = document.getElementById('position-filter').value;
+      const yearFilter = document.getElementById('year-filter').value;
+      const monthFilter = document.getElementById('month-filter').value;
+
+      const tbody = document.getElementById('shifts-body');
+      tbody.innerHTML = '';
+
+      let totalHours = 0;
+      let totalPay = 0;
+
+      data
+        .filter(shift => {
+          const shiftYear = shift.start_date.slice(0, 4);
+          const shiftMonth = shift.start_date.slice(5, 7);
+          return (!positionFilter || shift.position === positionFilter) &&
+                 (!yearFilter || shiftYear === yearFilter) &&
+                 (!monthFilter || shiftMonth === monthFilter);
+        })
+        .forEach(shift => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${shift.title}</td>
+            <td>${shift.position}</td>
+            <td>${shift.start_date} ${shift.start_time}</td>
+            <td>${shift.end_date} ${shift.end_time}</td>
+            <td>${shift.real_startdate ?? '-' } ${shift.real_starttime ?? ''}</td>
+            <td>${shift.real_enddate ?? '-' } ${shift.real_endtime ?? ''}</td>
+            <td>${shift.hours?.toFixed(2) ?? '-'}</td>
+            <td>${shift.pay?.toFixed(2) ?? '-'}</td>
+          `;
+          tbody.appendChild(tr);
+
+          if (typeof shift.hours === 'number' && !isNaN(shift.hours)) {
+            totalHours += shift.hours;
+          }
+          if (typeof shift.pay === 'number' && !isNaN(shift.pay)) {
+            totalPay += shift.pay;
+          }
+        });
+
+      document.getElementById('total-hours').textContent = totalHours.toFixed(2);
+      document.getElementById('total-pay').textContent = totalPay.toFixed(2);
+    } catch (error) {
+      console.error('Chyba při načítání směn:', error);
+    }
+  }
+
+  document.getElementById('position-filter').addEventListener('change', fetchShifts);
+
+  fetchShifts();
   </script>
 </body>
 </html>

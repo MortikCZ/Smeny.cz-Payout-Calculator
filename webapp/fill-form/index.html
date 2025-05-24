@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Úprava směn</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>Úprava směn</h1>
+  <form id="shiftForm">
+    <label for="year-filter">Rok:</label>
+    <select id="year-filter"><option value="">Vše</option></select>
+    <label for="month-filter">Měsíc:</label>
+    <select id="month-filter"><option value="">Vše</option></select>
+    <br><br>
+
+    <label for="uid">Vyberte směnu:</label>
+    <select id="uid" name="uid" required>
+      <option value="">-- Vyberte směnu --</option>
+    </select>
+    <br><br>
+
+    <label for="realStartDate">Datum začátku:</label>
+    <input type="date" id="realStartDate" name="realStartDate"><br><br>
+
+    <label for="realStartTime">Čas začátku:</label>
+    <input type="time" id="realStartTime" name="realStartTime"><br><br>
+
+    <label for="realEndDate">Datum konce:</label>
+    <input type="date" id="realEndDate" name="realEndDate"><br><br>
+
+    <label for="realEndTime">Čas konce:</label>
+    <input type="time" id="realEndTime" name="realEndTime"><br><br>
+
+    <fieldset>
+      <legend>Příplatky ke směně</legend>
+      <div id="bonuses-list"></div>
+      <button type="button" onclick="addBonusRow()">Přidat příplatek</button>
+    </fieldset>
+
+    <button type="submit">Odeslat</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    let shiftsCache = [];
+    let allShifts = [];
+
+    function fillYearMonthFilters(data) {
+      const yearMonthSet = new Set(data.map(s => s.start_date.slice(0, 7)));
+      const years = Array.from(new Set(Array.from(yearMonthSet).map(ym => ym.slice(0, 4)))).sort();
+      const months = Array.from(new Set(Array.from(yearMonthSet).map(ym => ym.slice(5, 7)))).sort();
+
+      const yearSelect = document.getElementById('year-filter');
+      yearSelect.innerHTML = '<option value="">Vše</option>' +
+        years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+      const now = new Date();
+      const currentYear = String(now.getFullYear());
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+      if (years.includes(currentYear)) yearSelect.value = currentYear;
+      else yearSelect.value = '';
+
+      function updateMonthOptions() {
+        const selectedYear = yearSelect.value;
+        const availableMonths = Array.from(yearMonthSet)
+          .filter(ym => !selectedYear || ym.slice(0, 4) === selectedYear)
+          .map(ym => ym.slice(5, 7));
+        const uniqueMonths = Array.from(new Set(availableMonths)).sort();
+
+        const monthNames = {
+          "01": "Leden", "02": "Únor", "03": "Březen", "04": "Duben", "05": "Květen", "06": "Červen",
+          "07": "Červenec", "08": "Srpen", "09": "Září", "10": "Říjen", "11": "Listopad", "12": "Prosinec"
+        };
+        const monthSelect = document.getElementById('month-filter');
+        monthSelect.innerHTML = '<option value="">Vše</option>' +
+          uniqueMonths.map(m => `<option value="${m}">${monthNames[m] || m}</option>`).join('');
+
+        if (selectedYear === currentYear && uniqueMonths.includes(currentMonth)) {
+          monthSelect.value = currentMonth;
+        } else {
+          monthSelect.value = '';
+        }
+      }
+
+      updateMonthOptions();
+
+      yearSelect.onchange = function() {
+        updateMonthOptions();
+        updateShiftSelect();
+      };
+      document.getElementById('month-filter').onchange = updateShiftSelect;
+    }
+
+    async function loadShifts() {
+      const res = await fetch('http://localhost:3000/api/shifts');
+      const shifts = await res.json();
+      allShifts = shifts;
+      fillYearMonthFilters(shifts);
+      updateShiftSelect();
+    }
+
+    function updateShiftSelect() {
+      const year = document.getElementById('year-filter').value;
+      const month = document.getElementById('month-filter').value;
+      shiftsCache = allShifts.filter(shift => {
+        const y = shift.start_date.slice(0, 4);
+        const m = shift.start_date.slice(5, 7);
+        return (!year || y === year) && (!month || m === month);
+      });
+      const select = document.getElementById('uid');
+      select.innerHTML = '<option value="">-- Vyberte směnu --</option>' +
+        shiftsCache.map(shift =>
+          `<option value="${shift.uid}">${shift.position || shift.title || shift.uid} (${shift.start_date} ${shift.start_time} - ${shift.end_date} ${shift.end_time})</option>`
+        ).join('');
+    }
+
+    document.getElementById('year-filter').addEventListener('change', updateShiftSelect);
+    document.getElementById('month-filter').addEventListener('change', updateShiftSelect);
+
+    document.getElementById('uid').addEventListener('change', function() {
+      const uid = this.value;
+      const shift = shiftsCache.find(s => s.uid === uid);
+      document.getElementById('realStartDate').value = '';
+      document.getElementById('realStartTime').value = '';
+      document.getElementById('realEndDate').value = '';
+      document.getElementById('realEndTime').value = '';
+      document.getElementById('bonuses-list').innerHTML = '';
+
+      if (!shift) return;
+
+      document.getElementById('realStartDate').value = shift.real_startdate || shift.start_date;
+      document.getElementById('realStartTime').value = shift.real_starttime || shift.start_time;
+      document.getElementById('realEndDate').value = shift.real_enddate || shift.end_date;
+      document.getElementById('realEndTime').value = shift.real_endtime || shift.end_time;
+
+      if (shift.bonuses && Array.isArray(shift.bonuses)) {
+        shift.bonuses.forEach(bonus => addBonusRow(bonus));
+      }
+    });
+
+    document.getElementById('shiftForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const uid = document.getElementById('uid').value;
+      const realStartDate = document.getElementById('realStartDate').value;
+      const realStartTime = document.getElementById('realStartTime').value;
+      const realEndDate = document.getElementById('realEndDate').value;
+      const realEndTime = document.getElementById('realEndTime').value;
+
+      const bonuses = Array.from(document.querySelectorAll('.bonus-row')).map(row => ({
+        from: row.querySelector('input[name="bonus_from"]').value,
+        to: row.querySelector('input[name="bonus_to"]').value,
+        percent: parseFloat(row.querySelector('input[name="bonus_percent"]').value)
+      }));
+
+      const response = await fetch(`http://localhost:3000/api/shifts/${uid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realStartDate, realStartTime, realEndDate, realEndTime, bonuses })
+      });
+
+      const result = await response.json();
+      document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+    });
+
+    function addBonusRow(values = {}) {
+      const container = document.getElementById('bonuses-list');
+      const div = document.createElement('div');
+      div.className = "bonus-row";
+      div.innerHTML = `
+        <input type="time" name="bonus_from" value="${values.from || ''}" required>
+        <input type="time" name="bonus_to" value="${values.to || ''}" required>
+        <input type="number" name="bonus_percent" value="${values.percent || ''}" min="0" max="500" required> %
+        <button type="button" onclick="this.parentElement.remove()">Odebrat</button>
+      `;
+      container.appendChild(div);
+    }
+
+    loadShifts();
+  </script>
+</body>
+</html>
