@@ -21,7 +21,7 @@ jobs:
         run: docker save smenycz-payout-calculator -o smenycz-payout-calculator.tar
 
       - name: Upload image as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: docker-image
           path: smenycz-payout-calculator.tar
